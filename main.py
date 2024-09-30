@@ -2,45 +2,59 @@ import configparser
 from flask import Flask, request, Response
 import json
 import subprocess
+import os
+
+dirList = os.listdir(os.getcwd() + "/config")
+validConfigFiles = [file for file in dirList if file.endswith('.config')]
+repos = []
+
+for validFile in validConfigFiles:
+
+    config = configparser.ConfigParser()
+    print(validFile)
+    config.read("./config/" + validFile)
+    
+    repos.append({
+        "name": config.get('MAIN', 'REPO_NAME'),
+        "url": config.get('MAIN', 'GIT_REPO'),
+        "branch": config.get('MAIN', 'BRANCH'),
+        "command": config.get('COMMANDS', 'COMMAND_TO_EXECUTE')
+    })
 
 config = configparser.ConfigParser()
 config.read('server.config')
-
 port = config.get('MAIN', 'PORT')
-repo = config.get('MAIN', 'REPO_NAME')
-repoUrl = config.get('MAIN', 'GIT_REPO')
-branch = str(config.get('MAIN', 'BRANCH'))
-
-command = config.get('COMMANDS', 'COMMAND_TO_EXECUTE')
 
 app = Flask(__name__)
 
-@app.route('/' + repo, methods=['POST'])
-def respond():
-    body = request.json
+for repo in repos:
 
-    if body['repository']['url'] == repoUrl:
+    @app.route('/' + repo['name'], methods=['POST'])
+    def respond():
+        body = request.json
 
-        if body['ref'] == ("refs/heads/" + branch):
+        if body['repository']['url'] == repo['url']:
 
-            print("Executing command")
-            with open("executed.log", "w") as file:
-                result = subprocess.run(command.split(), capture_output=True, text=True)
-                file.write(result.stdout)
-                if result.returncode == 0:
-                    print("Command was executed successfully")
-                else:
-                    print(result.returncode)
+            if body['ref'] == ("refs/heads/" + repo['branch']):
 
-            return Response(status=200)
+                print("Executing command")
+                with open("executed.log", "w") as file:
+                    result = subprocess.run(repo['command'].split(), capture_output=True, text=True)
+                    file.write(result.stdout)
+                    if result.returncode == 0:
+                        print("Command was executed successfully")
+                    else:
+                        print(result.returncode)
+
+                return Response(status=200)
+
+            else:
+                print("Webhook received was not send for branch refs/heads/" + repo['branch'] + " but instead for branch " + body['ref'])
 
         else:
-            print("Webhook received was not send for branch refs/heads/" + branch + " but instead for branch " + body['ref'])
-
-    else:
-        print("URL of repo does not match configuration")
+            print("URL of repo does not match configuration")
+        
+        return Response(status=400)
     
-    return Response(status=400)
-
 if __name__ == '__main__':
-    app.run(debug=True, port=port)
+    app.run(debug=False, port=port)
