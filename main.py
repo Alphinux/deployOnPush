@@ -1,8 +1,16 @@
 import configparser
 from flask import Flask, request, Response
-import json
 import subprocess
 import os
+import time
+
+def generateTimeString():
+    curTime = time.localtime(time.time())
+    return str(curTime.tm_mday) + "." + str(curTime.tm_mon) + "." + str(curTime.tm_year)[2:] + ", " + str(curTime.tm_hour) + ":" + str(curTime.tm_min) 
+
+def log(input):
+    with open('./logs/main.log', "a") as file:
+        file.write(generateTimeString() + " : " + input + "\n")
 
 dirList = os.listdir(os.getcwd() + "/config")
 validConfigFiles = [file for file in dirList if file.endswith('.config')]
@@ -11,7 +19,6 @@ repos = []
 for validFile in validConfigFiles:
 
     config = configparser.ConfigParser()
-    print(validFile)
     config.read("./config/" + validFile)
     
     repos.append({
@@ -37,24 +44,25 @@ for repo in repos:
 
             if body['ref'] == ("refs/heads/" + repo['branch']):
 
-                print("Executing command")
-                with open("executed.log", "w") as file:
-                    result = subprocess.run(repo['command'].split(), capture_output=True, text=True)
-                    file.write(result.stdout)
+                log("Received hook for commit " + body['after'])
+                with open("./logs/executed.log", "w") as file:
+                    result = subprocess.run(repo['command'].split(), capture_output=True, text=True, check=False, shell=True)
+                    file.write(str(result.stdout))
                     if result.returncode == 0:
-                        print("Command was executed successfully")
+                        log("Command was executed successfully")
+                        return Response(status=200)
                     else:
-                        print(result.returncode)
-
-                return Response(status=200)
+                        log("Command failed with code " + str(result.returncode))
+                        return Response(status=500)
 
             else:
-                print("Webhook received was not send for branch refs/heads/" + repo['branch'] + " but instead for branch " + body['ref'])
+                log("Webhook received was not send for branch refs/heads/" + repo['branch'] + " but instead for branch " + body['ref'])
 
         else:
-            print("URL of repo does not match configuration")
+            log("URL of repo does not match configuration")
         
         return Response(status=400)
     
 if __name__ == '__main__':
     app.run(debug=False, port=port)
+

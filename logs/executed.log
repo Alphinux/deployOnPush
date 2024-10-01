@@ -1,0 +1,6 @@
+__pycache__
+config
+logs
+main.py
+requirements.txt
+server.config
