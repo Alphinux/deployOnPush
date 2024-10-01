@@ -9,6 +9,7 @@ from flask import Flask, request, Response
 if not os.path.exists('logs'):
     # Create the directory
     os.makedirs('logs')
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='logs/main.log', level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
@@ -27,6 +28,7 @@ def log(message, repo, level = 0):
 # --- Read possible configuration files ---
 dirList = os.listdir(os.getcwd() + "/config")
 possibleConfigFiles = [file for file in dirList if file.endswith('.config') and not file == 'default.config']
+
 repos = []
 
 for possibleFile in possibleConfigFiles:
@@ -41,6 +43,7 @@ for possibleFile in possibleConfigFiles:
             "branch": config.get('MAIN', 'BRANCH'),
             "command": config.get('COMMANDS', 'COMMAND_TO_EXECUTE')
         })
+
     except:
         print("There's been an error while reading " + possibleFile + ". Maybe the configuration's not in the right format?")
 
@@ -57,6 +60,7 @@ if len(repos) != 0:
 
         @app.route('/' + repo['name'], methods=['POST'])
         def respond():
+
             body = request.json
 
             log("Received hook for commit " + body['after'], repo['name']) 
@@ -66,11 +70,14 @@ if len(repos) != 0:
                 if body['ref'] == ("refs/heads/" + repo['branch']):
 
                     with open("logs/executed.log", "w") as file:
+
                         result = subprocess.run(repo['command'], capture_output=True, text=True, check=False, shell=True, cwd=os.getcwd())
                         file.write(str(result.stdout))
+
                         if result.returncode == 0:
                             log("Command was executed successfully", repo['name'])
                             return Response(status=200)
+                        
                         else:
                             log("Command failed with code " + str(result.returncode), repo['name'])
                             return Response(status=500)
