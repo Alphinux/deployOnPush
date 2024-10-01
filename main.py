@@ -8,9 +8,9 @@ def generateTimeString():
     curTime = time.localtime(time.time())
     return str(curTime.tm_mday) + "." + str(curTime.tm_mon) + "." + str(curTime.tm_year)[2:] + ", " + str(curTime.tm_hour) + ":" + str(curTime.tm_min) 
 
-def log(input):
+def log(input, repo):
     with open('./logs/main.log', "a") as file:
-        file.write(generateTimeString() + " : " + input + "\n")
+        file.write(generateTimeString() + " : " + repo + " : " + input + "\n")
 
 dirList = os.listdir(os.getcwd() + "/config")
 validConfigFiles = [file for file in dirList if file.endswith('.config')]
@@ -40,26 +40,27 @@ for repo in repos:
     def respond():
         body = request.json
 
-        if body['repository']['url'] == repo['url']:
+        log("Received hook for commit " + body['after'], repo['name'])
+
+        if body['repository']['name'] == repo['name'] and body['repository']['url'] == repo['url']:
 
             if body['ref'] == ("refs/heads/" + repo['branch']):
 
-                log("Received hook for commit " + body['after'])
                 with open("./logs/executed.log", "w") as file:
                     result = subprocess.run(repo['command'].split(), capture_output=True, text=True, check=False, shell=True)
                     file.write(str(result.stdout))
                     if result.returncode == 0:
-                        log("Command was executed successfully")
+                        log("Command was executed successfully", repo['name'])
                         return Response(status=200)
                     else:
-                        log("Command failed with code " + str(result.returncode))
+                        log("Command failed with code " + str(result.returncode), repo['name'])
                         return Response(status=500)
 
             else:
-                log("Webhook received was not send for branch refs/heads/" + repo['branch'] + " but instead for branch " + body['ref'])
+                log("Webhook received was not send for branch refs/heads/" + repo['branch'] + " but instead for branch " + body['ref'], repo['name'])
 
         else:
-            log("URL of repo does not match configuration")
+            log("Name or URL of repo does not match configuration", repo['name'])
         
         return Response(status=400)
     
