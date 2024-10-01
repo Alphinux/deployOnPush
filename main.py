@@ -13,57 +13,66 @@ def log(input, repo):
         file.write(generateTimeString() + " : " + repo + " : " + input + "\n")
 
 dirList = os.listdir(os.getcwd() + "/config")
-validConfigFiles = [file for file in dirList if file.endswith('.config')]
+validConfigFiles = [file for file in dirList if file.endswith('.config') and not file == 'default.config']
 repos = []
 
 for validFile in validConfigFiles:
 
+    try:
+        config = configparser.ConfigParser()
+        config.read("./config/" + validFile)
+        
+        repos.append({
+            "name": config.get('MAIN', 'REPO_NAME'),
+            "url": config.get('MAIN', 'GIT_REPO'),
+            "branch": config.get('MAIN', 'BRANCH'),
+            "command": config.get('COMMANDS', 'COMMAND_TO_EXECUTE')
+        })
+    except:
+        print("There's been an error when reading " + validFile + ". Maybe the configuration's not in the right format?")
+
+if len(repos) != 0:
+
     config = configparser.ConfigParser()
-    config.read("./config/" + validFile)
-    
-    repos.append({
-        "name": config.get('MAIN', 'REPO_NAME'),
-        "url": config.get('MAIN', 'GIT_REPO'),
-        "branch": config.get('MAIN', 'BRANCH'),
-        "command": config.get('COMMANDS', 'COMMAND_TO_EXECUTE')
-    })
+    config.read('server.config')
+    port = config.get('MAIN', 'PORT')
 
-config = configparser.ConfigParser()
-config.read('server.config')
-port = config.get('MAIN', 'PORT')
+    app = Flask(__name__)
 
-app = Flask(__name__)
+    for repo in repos:
 
-for repo in repos:
+        @app.route('/' + repo['name'], methods=['POST'])
+        def respond():
+            body = request.json
 
-    @app.route('/' + repo['name'], methods=['POST'])
-    def respond():
-        body = request.json
+            log("Received hook for commit " + body['after'], repo['name'])
 
-        log("Received hook for commit " + body['after'], repo['name'])
+            if body['repository']['name'] == repo['name'] and body['repository']['url'] == repo['url']:
 
-        if body['repository']['name'] == repo['name'] and body['repository']['url'] == repo['url']:
+                if body['ref'] == ("refs/heads/" + repo['branch']):
 
-            if body['ref'] == ("refs/heads/" + repo['branch']):
+                    with open("./logs/executed.log", "w") as file:
+                        result = subprocess.run(repo['command'].split(), capture_output=True, text=True, check=False, shell=True)
+                        file.write(str(result.stdout))
+                        if result.returncode == 0:
+                            log("Command was executed successfully", repo['name'])
+                            return Response(status=200)
+                        else:
+                            log("Command failed with code " + str(result.returncode), repo['name'])
+                            return Response(status=500)
 
-                with open("./logs/executed.log", "w") as file:
-                    result = subprocess.run(repo['command'].split(), capture_output=True, text=True, check=False, shell=True)
-                    file.write(str(result.stdout))
-                    if result.returncode == 0:
-                        log("Command was executed successfully", repo['name'])
-                        return Response(status=200)
-                    else:
-                        log("Command failed with code " + str(result.returncode), repo['name'])
-                        return Response(status=500)
+                else:
+                    log("Webhook received was not send for branch refs/heads/" + repo['branch'] + " but instead for branch " + body['ref'], repo['name'])
 
             else:
-                log("Webhook received was not send for branch refs/heads/" + repo['branch'] + " but instead for branch " + body['ref'], repo['name'])
+                log("Name or URL of repo does not match configuration", repo['name'])
+            
+            return Response(status=400)
 
-        else:
-            log("Name or URL of repo does not match configuration", repo['name'])
+
+    if __name__ == '__main__':
+        app.run(debug=False, port=port)
         
-        return Response(status=400)
-    
-if __name__ == '__main__':
-    app.run(debug=False, port=port)
+else:
+    print("No server has been configured.")
 
