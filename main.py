@@ -1,11 +1,14 @@
 import configparser
-from flask import Flask, request, Response
 import subprocess
 import os
 import time
 import logging
+from flask import Flask, request, Response
 
 # --- Logging ---
+if not os.path.exists('logs'):
+    # Create the directory
+    os.makedirs('logs')
 logger = logging.getLogger(__name__)
 logging.basicConfig(filename='logs/main.log', level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
@@ -30,7 +33,7 @@ for possibleFile in possibleConfigFiles:
 
     try:
         config = configparser.ConfigParser()
-        config.read("./config/" + possibleFile)
+        config.read("config/" + possibleFile)
         
         repos.append({
             "name": config.get('MAIN', 'REPO_NAME'),
@@ -39,7 +42,7 @@ for possibleFile in possibleConfigFiles:
             "command": config.get('COMMANDS', 'COMMAND_TO_EXECUTE')
         })
     except:
-        print("There's been an error when reading " + possibleFile + ". Maybe the configuration's not in the right format?")
+        print("There's been an error while reading " + possibleFile + ". Maybe the configuration's not in the right format?")
 
 # --- Setup server ---
 if len(repos) != 0:
@@ -62,8 +65,8 @@ if len(repos) != 0:
 
                 if body['ref'] == ("refs/heads/" + repo['branch']):
 
-                    with open("./logs/executed.log", "w") as file:
-                        result = subprocess.run(repo['command'].split(), capture_output=True, text=True, check=False, shell=True)
+                    with open("logs/executed.log", "w") as file:
+                        result = subprocess.run(repo['command'], capture_output=True, text=True, check=False, shell=True, cwd=os.getcwd())
                         file.write(str(result.stdout))
                         if result.returncode == 0:
                             log("Command was executed successfully", repo['name'])
@@ -81,6 +84,7 @@ if len(repos) != 0:
             return Response(status=400)
 
     if __name__ == '__main__':
+        # app.run(debug=True, port=port)
         print("Run the server according to the documentation in README.md")
     else:
         print("Server has been started")
