@@ -3,24 +3,34 @@ from flask import Flask, request, Response
 import subprocess
 import os
 import time
+import logging
 
-def generateTimeString():
-    curTime = time.localtime(time.time())
-    return str(curTime.tm_mday) + "." + str(curTime.tm_mon) + "." + str(curTime.tm_year)[2:] + ", " + str(curTime.tm_hour) + ":" + str(curTime.tm_min) 
+# --- Logging ---
+logger = logging.getLogger(__name__)
+logging.basicConfig(filename='logs/main.log', level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
-def log(input, repo):
-    with open('./logs/main.log', "a") as file:
-        file.write(generateTimeString() + " : " + repo + " : " + input + "\n")
+def log(message, repo, level = 0):
 
+    match level:
+        case 0:
+            logging.info(repo + " : " + message)
+        case 1:
+            logging.warning(repo + " : " + message)
+        case 2:
+            logging.error(repo + " : " + message)
+        case 3:
+            logging.critical(repo + " : " + message)
+
+# --- Read possible configuration files ---
 dirList = os.listdir(os.getcwd() + "/config")
-validConfigFiles = [file for file in dirList if file.endswith('.config') and not file == 'default.config']
+possibleConfigFiles = [file for file in dirList if file.endswith('.config') and not file == 'default.config']
 repos = []
 
-for validFile in validConfigFiles:
+for possibleFile in possibleConfigFiles:
 
     try:
         config = configparser.ConfigParser()
-        config.read("./config/" + validFile)
+        config.read("./config/" + possibleFile)
         
         repos.append({
             "name": config.get('MAIN', 'REPO_NAME'),
@@ -29,8 +39,9 @@ for validFile in validConfigFiles:
             "command": config.get('COMMANDS', 'COMMAND_TO_EXECUTE')
         })
     except:
-        print("There's been an error when reading " + validFile + ". Maybe the configuration's not in the right format?")
+        print("There's been an error when reading " + possibleFile + ". Maybe the configuration's not in the right format?")
 
+# --- Setup server ---
 if len(repos) != 0:
 
     config = configparser.ConfigParser()
@@ -45,7 +56,7 @@ if len(repos) != 0:
         def respond():
             body = request.json
 
-            log("Received hook for commit " + body['after'], repo['name'])
+            log("Received hook for commit " + body['after'], repo['name']) 
 
             if body['repository']['name'] == repo['name'] and body['repository']['url'] == repo['url']:
 
@@ -69,9 +80,10 @@ if len(repos) != 0:
             
             return Response(status=400)
 
-
     if __name__ == '__main__':
-        app.run(debug=False, port=port)
+        print("Run the server according to the documentation in README.md")
+    else:
+        print("Server has been started")
         
 else:
     print("No server has been configured.")
